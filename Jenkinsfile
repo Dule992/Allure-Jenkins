@@ -1,8 +1,7 @@
 pipeline {
-  agent any  
-  
-  docker {   image 'mcr.microsoft.com/dotnet/sdk:8.0'   } 
-
+  agent any  {
+   docker {   image 'mcr.microsoft.com/dotnet/sdk:8.0'   } 
+  }
   environment {
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
     BUILD_CONFIGURATION = 'Release'
