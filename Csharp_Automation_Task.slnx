@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitignore" />
+  </Folder>
+  <Project Path="API_Automation/API_Automation.csproj" />
+  <Project Path="UI_Automation/UI_Automation.csproj" />
+</Solution>

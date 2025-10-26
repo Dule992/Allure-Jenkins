@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Allure.Net.Commons" Version="2.14.1" />
+		<PackageReference Include="Allure.Reqnroll" Version="2.14.1" />
+		<PackageReference Include="Bogus" Version="35.6.4" />
+		<PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+		<PackageReference Include="Reqnroll" Version="3.2.0" />
+		<PackageReference Include="Reqnroll.NUnit" Version="3.2.0" />
+		<PackageReference Include="nunit" Version="4.4.0" />
+		<PackageReference Include="NUnit3TestAdapter" Version="5.2.0" />
+		<PackageReference Include="RestSharp" Version="112.1.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="allureConfig.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="appsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	
+	<ItemGroup>
+		<Analyzer Include="$(NuGetPackageRoot)\reqnroll.analyzers\**\Reqnroll.Analyzers.dll" />
+	</ItemGroup>
+
+
+	<ItemGroup>
+		<SpecFlowFeatureFiles Include="Features\*.feature" />
+	</ItemGroup>
+
+
+	<ItemGroup>
+	  <Compile Remove="Support\**" />
+	  <EmbeddedResource Remove="Support\**" />
+	  <None Remove="Support\**" />
+	  <ReqnrollFeatureFiles Remove="Support\**" />
+	  <ReqnrollObsoleteCodeBehindFiles Remove="Support\**" />
+	</ItemGroup>
+
+
+	<ItemGroup>
+	  <Content Remove="C:\Users\dusan\.nuget\packages\allure.net.commons\2.14.1\contentFiles\any\netstandard2.0\allureConfig.Template.json" />
+	</ItemGroup>
+
+
+	<ItemGroup>
+	  <Content Update="C:\Users\srmil\.nuget\packages\allure.net.commons\2.14.1\contentFiles\any\netstandard2.0\allureConfig.Template.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
+</Project>
