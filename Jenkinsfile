@@ -1,5 +1,14 @@
 pipeline {
-  agent any
+  agent { docker { image 'mcr.microsoft.com/dotnet/sdk:8.0' } }
+  stages {
+    stage('Restore & Build') {
+      steps {
+        sh 'dotnet --info'
+        sh 'dotnet restore'
+        sh 'dotnet build --configuration Release --no-restore'
+      }
+    }
+  }
 
   environment {
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
