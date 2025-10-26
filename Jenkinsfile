@@ -1,14 +1,7 @@
 pipeline {
-  agent { docker { image 'mcr.microsoft.com/dotnet/sdk:8.0' } }
-  stages {
-    stage('Restore & Build') {
-      steps {
-        sh 'dotnet --info'
-        sh 'dotnet restore'
-        sh 'dotnet build --configuration Release --no-restore'
-      }
-    }
-  }
+  agent any  
+  
+  docker {   image 'mcr.microsoft.com/dotnet/sdk:8.0'   } 
 
   environment {
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -49,13 +42,9 @@ pipeline {
     stage('Restore & Build') {
       steps {
         script {
-          if (isUnix()) {
+            sh "dotnet --info"
             sh "dotnet restore"
-            sh "dotnet build -c ${BUILD_CONFIGURATION}"
-          } else {
-            bat "dotnet restore"
-            bat "dotnet build -c %BUILD_CONFIGURATION%"
-          }
+            sh ""dotnet build -c ${BUILD_CONFIGURATION} --no-restore"
         }
       }
     }
