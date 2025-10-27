@@ -1,7 +1,5 @@
 pipeline {
-  agent  {
-   docker {   image 'mcr.microsoft.com/dotnet/sdk:8.0'   } 
-  }
+  agent any
   environment {
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
     BUILD_CONFIGURATION = 'Release'
@@ -27,11 +25,13 @@ pipeline {
               rm -rf ${API_PROJECT_DIR}/bin/**/allure-results ${UI_PROJECT_DIR}/bin/**/allure-results || true
             """
           } else {
-            bat """
+              bat """
               rmdir /s /q "%WORKSPACE%\\allure-report" 2>nul || echo.
               rmdir /s /q "%WORKSPACE%\\allure-results" 2>nul || echo.
-              for /d %%D in ("%WORKSPACE%\\${API_PROJECT_DIR}\\bin\\*") do @rmdir /s /q "%%D\\allure-results" 2>nul || echo.
-              for /d %%D in ("%WORKSPACE%\\${UI_PROJECT_DIR}\\bin\\*") do @rmdir /s /q "%%D\\allure-results" 2>nul || echo.
+              for /d %%D in ("%WORKSPACE%\\${API_PROJECT_DIR}\\bin\\*") do ^
+                @rmdir /s /q "%%D\\allure-results" 2>nul || echo.
+              for /d %%D in ("%WORKSPACE%\\${UI_PROJECT_DIR}\\bin\\*") do ^
+                @rmdir /s /q "%%D\\allure-results" 2>nul || echo.
             """
           }
         }
@@ -52,7 +52,12 @@ pipeline {
         script {
           // run API tests first
           if (isUnix()) {
-            sh "dotnet test ${API_PROJECT_DIR} -c ${BUILD_CONFIGURATION} --no-build --logger \"console;verbosity=normal\""
+            sh """
+              dotnet test ${API_PROJECT_DIR} \
+                -c ${BUILD_CONFIGURATION} \
+                --no-build \
+                --logger "console;verbosity=normal"
+            """
           } else {
             bat "dotnet test ${API_PROJECT_DIR} -c %BUILD_CONFIGURATION% --no-build --logger \"console;verbosity=normal\""
           }
@@ -140,8 +145,15 @@ pipeline {
 
   post {
     always {
-      archiveArtifacts artifacts: 'allure-report/**', fingerprint: true
-      junit allowEmptyResults: true, testResults: '**/TestResults/**/*.trx'
+           bat "allure generate allure-report"
+           script {
+                    allure([
+                            includeProperties: false,
+                            jdk: '',
+                            properties: [],
+                            reportBuildPolicy: 'ALWAYS',
+                            results: [[path: 'target/allure-results']]
+                    ])
+           }
     }
   }
-}
