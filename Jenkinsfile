@@ -41,7 +41,7 @@ pipeline {
     stage('Restore & Build') {
       steps {
         script {
-            sh "dotnet restore"
+            sh 'dotnet restore'
             sh "dotnet build -c ${BUILD_CONFIGURATION}"
         }
       }
@@ -142,3 +142,4 @@ pipeline {
       }
     }
   }
+}
