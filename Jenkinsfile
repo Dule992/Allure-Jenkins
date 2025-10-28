@@ -34,38 +34,48 @@ pipeline {
     stage('Prepare workspace') {
       steps {
         bat '''
-          rm -rf "${ALLURE_REPORT_DIR}" "${WORKSPACE_ALLURE}" TestResults || true
-          mkdir -p "${WORKSPACE_ALLURE}" TestResults
+          rem ---- clean old outputs (ignore if missing)
+          if exist "%ALLURE_REPORT_DIR%" rmdir /s /q "%ALLURE_REPORT_DIR%"
+          if exist "%WORKSPACE_ALLURE%"  rmdir /s /q "%WORKSPACE_ALLURE%"
+          if exist "TestResults"         rmdir /s /q "TestResults"
 
-          cat > "${ALLURE_CONFIG}" <<'JSON'
-          {
-            "allure": {
-              "directory": "allure-results"
-            }
-          }
-          JSON
+          rem ---- recreate folders
+          mkdir "%WORKSPACE_ALLURE%"
+          mkdir "TestResults"
+
+          rem ---- write AllureConfig.json at repo root
+          > "%WORKSPACE%\\AllureConfig.json" (
+            echo {
+            echo   "allure": {
+            echo     "directory": "allure-results"
+            echo   }
+            echo }
+          )
         '''
       }
     }
 
-    stage('Restore & Build') {
+    stage('Restore & Build (Docker)') {
       steps {
         bat '''
-          dotnet --info
-          dotnet restore
-          dotnet build -c "${CONFIGURATION}" --no-restore
+            docker run --rm ^
+            -v "%WORKSPACE%":/src ^
+            -w /src ^
+            mcr.microsoft.com/dotnet/sdk:8.0 ^
+            bash -lc "dotnet --info && dotnet restore && dotnet build -c ${CONFIGURATION} --no-restore"
         '''
       }
     }
 
-    stage('Test API Project') {
+    stage('Test API Project (Docker)') {
       steps {
         bat '''
-          # If API_PROJECT_DIR points to a folder containing a single .csproj, dotnet will pick it up.
-          # Otherwise set it to the .csproj path, e.g., API_Automation/API_Automation.csproj
-          dotnet test "${API_PROJECT_DIR}" \
-            -c "${CONFIGURATION}" --no-build \
-            --logger "trx;LogFileName=TestResults_API.trx"
+            docker run --rm ^
+            -v "%WORKSPACE%":/src ^
+            -w /src ^
+            -e ALLURE_CONFIG=/src/AllureConfig.json ^
+            mcr.microsoft.com/dotnet/sdk:8.0 ^
+            bash -lc "mkdir -p /src/allure-results && dotnet test \\"${API_PROJECT_DIR}\\" -c ${CONFIGURATION} --no-build --logger \\"trx;LogFileName=TestResults_API.trx\\""
         '''
       }
       post {
@@ -76,19 +86,19 @@ pipeline {
       }
     }
 
-    stage('Test UI Project') {
+    stage('Test UI Project (Docker)') {
       steps {
         bat '''
-          dotnet test "${UI_PROJECT_DIR}" \
-            -c "${CONFIGURATION}" --no-build \
-            --logger "trx;LogFileName=TestResults_UI.trx"
+            docker run --rm ^
+            -v "%WORKSPACE%":/src ^
+            -w /src ^
+            -e ALLURE_CONFIG=/src/AllureConfig.json ^
+            mcr.microsoft.com/dotnet/sdk:8.0 ^
+            bash -lc "mkdir -p /src/allure-results && dotnet test \\"${UI_PROJECT_DIR}\\" -c ${CONFIGURATION} --no-build --logger \\"trx;LogFileName=TestResults_UI.trx\\""
+        """
         '''
       }
-      post {
-        always {
-          bat 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
-        }
-      }
+      post { always { bat """for /r %%f in (*.trx) do copy /Y "%%f" "%WORKSPACE%\\TestResults\\" >nul""" } }
     }
 
     stage('Publish Allure Report') {
@@ -97,9 +107,9 @@ pipeline {
         // If you named your Allure tool in Global Tool Configuration, you can pass it here.
         script {
           allure includeProperties: false,
-                 jdk: '',
-                 results: [[path: "${env.WORKSPACE_ALLURE}"]],
-                 reportBuildPolicy: 'ALWAYS'
+                jdk: '',
+                results: [[path: "${env.WORKSPACE}\\allure-results"]],
+                reportBuildPolicy: 'ALWAYS'
         }
       }
     }
