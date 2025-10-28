@@ -1,145 +1,138 @@
 pipeline {
-  agent any
+  agent {
+    // Ensures 'dotnet' is available even on bare agents
+    docker {
+      image 'mcr.microsoft.com/dotnet/sdk:8.0'
+      // Run as root to allow temp installs if needed
+      args '-u root:root -v $WORKSPACE:$WORKSPACE'
+      reuseNode true
+    }
+  }
+
   environment {
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
-    BUILD_CONFIGURATION = 'Release'
-    API_PROJECT_DIR = 'API_Automation'
-    UI_PROJECT_DIR  = 'UI_Automation'
+    CONFIGURATION = 'Release'
+
+    // Adjust these if your repo uses different paths/names
+    API_PROJECT_DIR = 'API_Automation/API_Automation.csproj'        // path to .csproj or folder
+    UI_PROJECT_DIR = 'UI_Automation/UI_Automation.csproj'         // path to .csproj or folder
+
+    // Allure paths
     WORKSPACE_ALLURE = "${env.WORKSPACE}/allure-results"
     ALLURE_REPORT_DIR = "${env.WORKSPACE}/allure-report"
+
+    // We'll point Allure .NET adapter to write into WORKSPACE_ALLURE
+    ALLURE_CONFIG = "${env.WORKSPACE}/AllureConfig.json"
+  }
+
+  options {
+    // Keep the console tidy and fail fast on errors
+    ansiColor('xterm')
+    timestamps()
+    durabilityHint('PERFORMANCE_OPTIMIZED')
+    buildDiscarder(logRotator(numToKeepStr: '20'))
   }
 
   stages {
     stage('Checkout') {
       steps {
+        // Works if the Jenkins job is connected to your GitHub repo;
+        // otherwise replace with explicit 'git url: "...", branch: "main"'
         checkout scm
       }
     }
 
-    stage('Clean previous results & report') {
+    stage('Prepare workspace') {
       steps {
-        script {
-          if (isUnix()) {
-            sh """
-              rm -rf "${ALLURE_REPORT_DIR}" "${WORKSPACE_ALLURE}"
-              rm -rf ${API_PROJECT_DIR}/bin/**/allure-results ${UI_PROJECT_DIR}/bin/**/allure-results || true
-            """
-          } else {
-              bat """
-              rmdir /s /q "%WORKSPACE%\\allure-report" 2>nul || echo.
-              rmdir /s /q "%WORKSPACE%\\allure-results" 2>nul || echo.
-              for /d %%D in ("%WORKSPACE%\\${API_PROJECT_DIR}\\bin\\*") do ^
-                @rmdir /s /q "%%D\\allure-results" 2>nul || echo.
-              for /d %%D in ("%WORKSPACE%\\${UI_PROJECT_DIR}\\bin\\*") do ^
-                @rmdir /s /q "%%D\\allure-results" 2>nul || echo.
-            """
+        sh '''
+          rm -rf "${ALLURE_REPORT_DIR}" "${WORKSPACE_ALLURE}" TestResults || true
+          mkdir -p "${WORKSPACE_ALLURE}" TestResults
+
+          cat > "${ALLURE_CONFIG}" <<'JSON'
+          {
+            "allure": {
+              "directory": "allure-results"
+            }
           }
-        }
+          JSON
+        '''
       }
     }
 
     stage('Restore & Build') {
       steps {
-        script {
-            sh 'dotnet restore'
-            sh "dotnet build -c ${BUILD_CONFIGURATION}"
-        }
+        sh '''
+          dotnet --info
+          dotnet restore
+          dotnet build -c "${CONFIGURATION}" --no-restore
+        '''
       }
     }
 
-    stage('API Tests') {
+    stage('Test API Project') {
       steps {
-        script {
-          // run API tests first
-          if (isUnix()) {
-            sh """
-              dotnet test ${API_PROJECT_DIR} \
-                -c ${BUILD_CONFIGURATION} \
-                --no-build \
-                --logger "console;verbosity=normal"
-            """
-          } else {
-            bat "dotnet test ${API_PROJECT_DIR} -c %BUILD_CONFIGURATION% --no-build --logger \"console;verbosity=normal\""
-          }
-        }
+        sh '''
+          # If API_PROJECT_DIR points to a folder containing a single .csproj, dotnet will pick it up.
+          # Otherwise set it to the .csproj path, e.g., API_Automation/API_Automation.csproj
+          dotnet test "${API_PROJECT_DIR}" \
+            -c "${CONFIGURATION}" --no-build \
+            --logger "trx;LogFileName=TestResults_API.trx"
+        '''
       }
       post {
         always {
-          script {
-            // collect API allure results into workspace/allure-results
-            if (isUnix()) {
-              sh """
-                mkdir -p "${WORKSPACE_ALLURE}/api" || true
-                cp -r ${API_PROJECT_DIR}/bin/${BUILD_CONFIGURATION}/net8.0/allure-results/* "${WORKSPACE_ALLURE}/api/" 2>/dev/null || true
-              """
-            } else {
-              bat """
-                if not exist "%WORKSPACE%\\allure-results\\api" mkdir "%WORKSPACE%\\allure-results\\api"
-                powershell -Command "Copy-Item -Path '${API_PROJECT_DIR}\\bin\\${BUILD_CONFIGURATION}\\net8.0\\allure-results\\*' -Destination '%WORKSPACE%\\allure-results\\api' -Recurse -Force -ErrorAction SilentlyContinue"
-              """
-            }
-          }
+          // Keep TRX files for debugging even if tests fail
+          sh 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
         }
       }
     }
 
-    stage('UI Tests') {
+    stage('Test UI Project') {
       steps {
-        script {
-          if (isUnix()) {
-            sh "dotnet test ${UI_PROJECT_DIR} -c ${BUILD_CONFIGURATION} --no-build --logger \"console;verbosity=normal\""
-          } else {
-            bat "dotnet test ${UI_PROJECT_DIR} -c %BUILD_CONFIGURATION% --no-build --logger \"console;verbosity=normal\""
-          }
-        }
+        sh '''
+          dotnet test "${UI_PROJECT_DIR}" \
+            -c "${CONFIGURATION}" --no-build \
+            --logger "trx;LogFileName=TestResults_UI.trx"
+        '''
       }
       post {
         always {
-          script {
-            // collect UI allure results into workspace/allure-results
-            if (isUnix()) {
-              sh """
-                mkdir -p "${WORKSPACE_ALLURE}/ui" || true
-                cp -r ${UI_PROJECT_DIR}/bin/${BUILD_CONFIGURATION}/net8.0/allure-results/* "${WORKSPACE_ALLURE}/ui/" 2>/dev/null || true
-              """
-            } else {
-              bat """
-                if not exist "%WORKSPACE%\\allure-results\\ui" mkdir "%WORKSPACE%\\allure-results\\ui"
-                powershell -Command "Copy-Item -Path '${UI_PROJECT_DIR}\\bin\\${BUILD_CONFIGURATION}\\net8.0\\allure-results\\*' -Destination '%WORKSPACE%\\allure-results\\ui' -Recurse -Force -ErrorAction SilentlyContinue"
-              """
-            }
-          }
+          sh 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
         }
       }
     }
 
-    stage('Merge results & Generate Allure report') {
+    stage('Publish Allure Report') {
       steps {
+        // Jenkins Allure Plugin pick ups generated results from WORKSPACE_ALLURE
+        // If you named your Allure tool in Global Tool Configuration, you can pass it here.
         script {
-          // merge: leave files as-is under workspace/allure-results (API and UI subfolders)
-          // Allure CLI accepts a directory with multiple result files;
-          // merge subfolders into a single input folder expected by allure CLI
-          if (isUnix()) {
-            sh """
-              mkdir -p "${WORKSPACE_ALLURE}/merged"
-              cp -r "${WORKSPACE_ALLURE}/api/"* "${WORKSPACE_ALLURE}/merged/" 2>/dev/null || true
-              cp -r "${WORKSPACE_ALLURE}/ui/"* "${WORKSPACE_ALLURE}/merged/" 2>/dev/null || true
-
-              # Generate report: note __allure generate__ cleans the output directory (it does NOT delete input results)
-              allure generate "${WORKSPACE_ALLURE}/merged" -o "${ALLURE_REPORT_DIR}" --clean
-            """
-          } else {
-            bat """
-              if not exist "%WORKSPACE%\\allure-results\\merged" mkdir "%WORKSPACE%\\allure-results\\merged"
-              powershell -Command "Copy-Item -Path '%WORKSPACE%\\allure-results\\api\\*' -Destination '%WORKSPACE%\\allure-results\\merged' -Recurse -Force -ErrorAction SilentlyContinue"
-              powershell -Command "Copy-Item -Path '%WORKSPACE%\\allure-results\\ui\\*' -Destination '%WORKSPACE%\\allure-results\\merged' -Recurse -Force -ErrorAction SilentlyContinue"
-
-              REM Generate report (requires 'allure' CLI on PATH)
-              call allure generate "%WORKSPACE%\\allure-results\\merged" -o "%WORKSPACE%\\allure-report" --clean
-            """
-          }
+          allure includeProperties: false,
+                 jdk: '',
+                 results: [[path: "${env.WORKSPACE_ALLURE}"]],
+                 reportBuildPolicy: 'ALWAYS'
         }
       }
+    }
+  }
+
+  post {
+    always {
+      // Archive artifacts for later download (TRX + allure raw + optional report folder)
+      archiveArtifacts artifacts: 'TestResults/**/*.trx, allure-results/**', fingerprint: true, allowEmptyArchive: true
+
+    // If you also want to generate static HTML locally (without the plugin), uncomment:
+    // sh '''
+    //   if ! command -v allure >/dev/null 2>&1; then
+    //     echo "Allure CLI not found in PATH. Skipping local generation (plugin will still publish)."
+    //   else
+    //     allure generate -c "${WORKSPACE_ALLURE}" -o "${ALLURE_REPORT_DIR}" || true
+    //   fi
+    // '''
+    // archiveArtifacts artifacts: 'allure-report/**', fingerprint: true, allowEmptyArchive: true
+    }
+    failure {
+      echo 'Build failed. Check TRX logs and Allure report for details.'
     }
   }
 }
