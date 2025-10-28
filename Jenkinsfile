@@ -25,14 +25,6 @@ pipeline {
     ALLURE_CONFIG = "${env.WORKSPACE}/AllureConfig.json"
   }
 
-  options {
-    // Keep the console tidy and fail fast on errors
-    ansiColor('xterm')
-    timestamps()
-    durabilityHint('PERFORMANCE_OPTIMIZED')
-    buildDiscarder(logRotator(numToKeepStr: '20'))
-  }
-
   stages {
     stage('Checkout') {
       steps {
