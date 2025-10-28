@@ -1,13 +1,5 @@
 pipeline {
-  agent {
-    // Ensures 'dotnet' is available even on bare agents
-    docker {
-      image 'mcr.microsoft.com/dotnet/sdk:8.0'
-      // Run as root to allow temp installs if needed
-      args '-u root:root -v $WORKSPACE:$WORKSPACE'
-      reuseNode true
-    }
-  }
+  agent any
 
   environment {
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -25,6 +17,12 @@ pipeline {
     ALLURE_CONFIG = "${env.WORKSPACE}/AllureConfig.json"
   }
 
+  options {
+    timestamps()
+    ansiColor('xterm')
+    buildDiscarder(logRotator(numToKeepStr: '15'))
+  }
+
   stages {
     stage('Checkout') {
       steps {
@@ -36,7 +34,7 @@ pipeline {
 
     stage('Prepare workspace') {
       steps {
-        sh '''
+        bat '''
           rm -rf "${ALLURE_REPORT_DIR}" "${WORKSPACE_ALLURE}" TestResults || true
           mkdir -p "${WORKSPACE_ALLURE}" TestResults
 
@@ -53,7 +51,7 @@ pipeline {
 
     stage('Restore & Build') {
       steps {
-        sh '''
+        bat '''
           dotnet --info
           dotnet restore
           dotnet build -c "${CONFIGURATION}" --no-restore
@@ -63,7 +61,7 @@ pipeline {
 
     stage('Test API Project') {
       steps {
-        sh '''
+        bat '''
           # If API_PROJECT_DIR points to a folder containing a single .csproj, dotnet will pick it up.
           # Otherwise set it to the .csproj path, e.g., API_Automation/API_Automation.csproj
           dotnet test "${API_PROJECT_DIR}" \
@@ -74,14 +72,14 @@ pipeline {
       post {
         always {
           // Keep TRX files for debugging even if tests fail
-          sh 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
+          bat 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
         }
       }
     }
 
     stage('Test UI Project') {
       steps {
-        sh '''
+        bat '''
           dotnet test "${UI_PROJECT_DIR}" \
             -c "${CONFIGURATION}" --no-build \
             --logger "trx;LogFileName=TestResults_UI.trx"
@@ -89,7 +87,7 @@ pipeline {
       }
       post {
         always {
-          sh 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
+          bat 'mkdir -p TestResults && find . -name "*.trx" -exec cp {} TestResults/ \\; || true'
         }
       }
     }
@@ -114,7 +112,7 @@ pipeline {
       archiveArtifacts artifacts: 'TestResults/**/*.trx, allure-results/**', fingerprint: true, allowEmptyArchive: true
 
     // If you also want to generate static HTML locally (without the plugin), uncomment:
-    // sh '''
+    // bat '''
     //   if ! command -v allure >/dev/null 2>&1; then
     //     echo "Allure CLI not found in PATH. Skipping local generation (plugin will still publish)."
     //   else
