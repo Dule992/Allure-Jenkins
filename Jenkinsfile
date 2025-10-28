@@ -6,9 +6,8 @@ pipeline {
     CONFIGURATION = 'Release'
 
     // Adjust these if your repo uses different paths/names
-    SLN_PATH        = 'Csharp_Automation_Task.slnx'
-    API_PROJECT_DIR = 'API_Automation/API_Automation.csproj'        // path to .csproj or folder
-    UI_PROJECT_DIR = 'UI_Automation/UI_Automation.csproj'         // path to .csproj or folder
+    API_PROJECT_DIR = 'API_Automation'        // path to .csproj or folder
+    UI_PROJECT_DIR = 'UI_Automation'         // path to .csproj or folder
 
     // Allure paths
     WORKSPACE_ALLURE = "${env.WORKSPACE}/allure-results"
@@ -63,7 +62,11 @@ pipeline {
             -v "%WORKSPACE%":/src ^
             -w /src ^
             mcr.microsoft.com/dotnet/sdk:8.0 ^
-            bash -lc "dotnet --info && dotnet restore \\"${SLN_PATH}\\" && dotnet build \\"${SLN_PATH}\\" -c ${CONFIGURATION} --no-restore"
+            bash -lc "dotnet --info && \
+                      dotnet restore ${API_PROJECT_DIR}/*.csproj && \
+                      dotnet restore ${UI_PROJECT_DIR}/*.csproj && \
+                      dotnet build ${API_PROJECT_DIR}/*.csproj -c ${CONFIGURATION} --no-restore && \
+                      dotnet build ${UI_PROJECT_DIR}/*.csproj -c ${CONFIGURATION} --no-restore"
         '''
       }
     }
@@ -76,7 +79,9 @@ pipeline {
             -w /src ^
             -e ALLURE_CONFIG=/src/AllureConfig.json ^
             mcr.microsoft.com/dotnet/sdk:8.0 ^
-            bash -lc "mkdir -p /src/allure-results && dotnet test \\"${API_PROJECT_DIR}\\" -c ${CONFIGURATION} --no-build --logger \\"trx;LogFileName=TestResults_API.trx\\""
+            bash -lc "mkdir -p /src/allure-results && \
+                      dotnet test "${API_PROJECT_DIR}/*.csproj -c ${CONFIGURATION} --no-build \
+                      --logger \\"trx;LogFileName=TestResults_API.trx\\""
         '''
       }
       post {
@@ -95,7 +100,9 @@ pipeline {
             -w /src ^
             -e ALLURE_CONFIG=/src/AllureConfig.json ^
             mcr.microsoft.com/dotnet/sdk:8.0 ^
-            bash -lc "mkdir -p /src/allure-results && dotnet test \\"${UI_PROJECT_DIR}\\" -c ${CONFIGURATION} --no-build --logger \\"trx;LogFileName=TestResults_UI.trx\\""
+            bash -lc "mkdir -p /src/allure-results && \
+                      dotnet test ${UI_PROJECT_DIR}/*.csproj -c ${CONFIGURATION} --no-build \
+                      --logger \\"trx;LogFileName=TestResults_UI.trx\\""
         """
         '''
       }
