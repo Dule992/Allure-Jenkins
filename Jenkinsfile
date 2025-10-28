@@ -6,6 +6,7 @@ pipeline {
     CONFIGURATION = 'Release'
 
     // Adjust these if your repo uses different paths/names
+    SLN_PATH        = 'Csharp_Automation_Task.slnx'
     API_PROJECT_DIR = 'API_Automation/API_Automation.csproj'        // path to .csproj or folder
     UI_PROJECT_DIR = 'UI_Automation/UI_Automation.csproj'         // path to .csproj or folder
 
@@ -62,7 +63,7 @@ pipeline {
             -v "%WORKSPACE%":/src ^
             -w /src ^
             mcr.microsoft.com/dotnet/sdk:8.0 ^
-            bash -lc "dotnet --info && dotnet restore && dotnet build -c ${CONFIGURATION} --no-restore"
+            bash -lc "dotnet --info && dotnet restore \\"${SLN_PATH}\\" && dotnet build \\"${SLN_PATH}\\" -c ${CONFIGURATION} --no-restore"
         '''
       }
     }
